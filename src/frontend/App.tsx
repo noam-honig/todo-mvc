@@ -1,37 +1,43 @@
 import './App.css';
-import { useState } from "react";
-import { Task } from "./Task"
+import { useEffect, useState } from "react";
+import { Task } from "../shared/Task";
+import { remult } from './common';
+import { ErrorInfo } from 'remult';
+import { TasksController } from '../shared/TasksController';
+const taskRepo = remult.repo(Task);
+function fetchTasks(hideCompleted: boolean) {
+  return taskRepo.find({
+    where: {
+      completed: hideCompleted ? false : undefined
+    }
+  });
+}
 
 function App() {
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 1, title: "Setup", completed: true },
-    { id: 2, title: "Entities", completed: false },
-    { id: 3, title: "Paging, Sorting and Filtering", completed: false },
-    { id: 4, title: "CRUD Operations", completed: false },
-    { id: 5, title: "Validation", completed: false },
-    { id: 6, title: "Backend methods", completed: false },
-    { id: 7, title: "Database", completed: false },
-    { id: 8, title: "Authentication and Authorization", completed: false },
-    { id: 9, title: "Deployment", completed: false }
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [editingTask, setEditingTask] = useState<Task>();
+  const [editingTask, setEditingTask] = useState<Task & { error?: ErrorInfo<Task> }>();
   const [hideCompleted, setHideCompleted] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetchTasks(hideCompleted).then(setTasks)
+  }, [hideCompleted]);
 
   const createNewTask = async () => {
     if (newTaskTitle) {
-      const newTask: Task = {
+      const newTask = await taskRepo.insert({
         title: newTaskTitle,
         completed: false,
         id: tasks.length + 1
-      };
+      });
       setTasks([...tasks, newTask]);
       setNewTaskTitle('');
     }
   }
 
   const setAll = async (completed: boolean) => {
-    setTasks(tasks.map(task => ({ ...task, completed })));
+    await TasksController.setAll(completed);
+    fetchTasks(hideCompleted).then(setTasks);
   }
 
   return (
@@ -62,10 +68,11 @@ function App() {
                 if (!editingTask || task.id != editingTask.id) {
 
                   const setCompleted = async (completed: boolean) => {
-                    const updatedTask: Task = { ...task, completed };
+                    const updatedTask = await taskRepo.save({ ...task, completed });
                     setTasks(tasks.map(t => t === task ? updatedTask : t));
                   }
                   const deleteTask = async () => {
+                    await taskRepo.delete(task);
                     setTasks(tasks.filter(t => t !== task));
                   };
                   return <li key={task.id} className={task.completed ? 'completed' : ''}>
@@ -82,8 +89,13 @@ function App() {
                 else {
 
                   const saveTask = async () => {
-                    setTasks(tasks.map(t => t === task ? editingTask : t));
-                    setEditingTask(undefined);
+                    try {
+                      const savedTask = await taskRepo.save(editingTask);
+                      setTasks(tasks.map(t => t === task ? savedTask : t));
+                      setEditingTask(undefined);
+                    } catch (error: any) {
+                      setEditingTask({ ...editingTask, error });
+                    }
                   };
                   const titleChange = (title: string) => {
                     setEditingTask({ ...editingTask, title });
@@ -93,6 +105,7 @@ function App() {
                       value={editingTask.title}
                       onBlur={saveTask}
                       onChange={e => titleChange(e.target.value)} />
+                    <span>{editingTask.error?.modelState?.title}</span>
                   </li>
                 }
 
