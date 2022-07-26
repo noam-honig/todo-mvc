@@ -1,10 +1,7 @@
 import { Entity, Fields } from "remult";
 
 @Entity("tasks", {
-    allowApiCrud: true,
-    defaultOrderBy: {
-        id: "asc"
-    }
+    allowApiCrud: true
 })
 export class Task {
     @Fields.autoIncrement()
